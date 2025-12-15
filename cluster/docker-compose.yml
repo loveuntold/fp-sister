@@ -1,0 +1,58 @@
+services:
+  redis-node-1:
+    image: redis:7.2
+    container_name: redis-node-1
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--port", "7000"]
+    volumes:
+      - ./redis-cluster.conf:/usr/local/etc/redis/redis.conf
+    ports: ["7000:7000"]
+    networks: [redis-cluster-net]
+
+  redis-node-2:
+    image: redis:7.2
+    container_name: redis-node-2
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--port", "7001"]
+    volumes:
+      - ./redis-cluster.conf:/usr/local/etc/redis/redis.conf
+    ports: ["7001:7001"]
+    networks: [redis-cluster-net]
+
+  redis-node-3:
+    image: redis:7.2
+    container_name: redis-node-3
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--port", "7002"]
+    volumes:
+      - ./redis-cluster.conf:/usr/local/etc/redis/redis.conf
+    ports: ["7002:7002"]
+    networks: [redis-cluster-net]
+
+  redis-node-4:
+    image: redis:7.2
+    container_name: redis-node-4
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--port", "7003"]
+    volumes:
+      - ./redis-cluster.conf:/usr/local/etc/redis/redis.conf
+    ports: ["7003:7003"]
+    networks: [redis-cluster-net]
+
+  redis-node-5:
+    image: redis:7.2
+    container_name: redis-node-5
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--port", "7004"]
+    volumes:
+      - ./redis-cluster.conf:/usr/local/etc/redis/redis.conf
+    ports: ["7004:7004"]
+    networks: [redis-cluster-net]
+
+  redis-node-6:
+    image: redis:7.2
+    container_name: redis-node-6
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--port", "7005"]
+    volumes:
+      - ./redis-cluster.conf:/usr/local/etc/redis/redis.conf
+    ports: ["7005:7005"]
+    networks: [redis-cluster-net]
+
+networks:
+  redis-cluster-net:
+    driver: bridge
