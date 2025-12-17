@@ -9,6 +9,7 @@ KEY_PREFIX = "key"
 KEY_START = 0
 KEY_END = 10000  # inclusive
 CLEANUP = True
+RUN_FAILOVER_TEST = False  # set True to run automated master stop/promote test
 
 
 def sh(cmd, inp=None):
@@ -199,6 +200,57 @@ def main():
     bulk_write_fast(slot_table)
     analyze_distribution(slot_table)
     cleanup_fast(slot_table)
+
+    if RUN_FAILOVER_TEST:
+        print("\n[Optional Phase] Running automated shard failover test")
+        # pick first master to stop
+        s0, e0, ip0, port0 = slot_ranges[0]
+        container = port_to_container(port0)
+        print(f"Stopping master container {container} (port {port0}) to force failover")
+        try:
+            subprocess.run(["docker", "stop", container], check=True)
+        except Exception as ex:
+            print(f"Failed to stop container: {ex}")
+        t0 = time.time()
+
+        # poll for slot ownership change or promoted replica
+        timeout = 60
+        promoted = None
+        while time.time() - t0 < timeout:
+            try:
+                raw_nodes = rcli(BOOTSTRAP_CONTAINER, BOOTSTRAP_PORT, "CLUSTER", "NODES")
+                # look for any node owning slots s0-e0 that isn't the old host:port
+                for line in raw_nodes.splitlines():
+                    parts = line.split()
+                    if len(parts) < 9:
+                        continue
+                    flags = parts[2]
+                    addr = parts[1].split("@")[0]
+                    ip, p = addr.split(":")
+                    port = int(p)
+                    if "master" in flags and not (ip == ip0 and port == port0):
+                        # check if this master owns our slot range
+                        for tok in parts[8:]:
+                            if "-" in tok and tok[0].isdigit():
+                                s, e = tok.split("-", 1)
+                                if int(s) <= s0 <= int(e):
+                                    promoted = f"{ip}:{port}"
+                                    break
+                    if promoted:
+                        break
+                if promoted:
+                    dt = time.time() - t0
+                    print(f"Detected promoted master: {promoted} (t={dt:.2f}s)")
+                    break
+            except Exception:
+                pass
+            time.sleep(1)
+
+        print("Restarting stopped container")
+        try:
+            subprocess.run(["docker", "start", container], check=True)
+        except Exception as ex:
+            print(f"Failed to restart container: {ex}")
 
 
 if __name__ == "__main__":

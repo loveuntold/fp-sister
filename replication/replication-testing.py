@@ -17,9 +17,9 @@ MASTER_PORT_IN_CONTAINER = 6379
 MASTER_HOST = "localhost"
 MASTER_PUBLISHED_PORT = 6379
 
-# Choose one replica published port (from your docker ps output)
+# Published replica ports on host (from your docker ps output). Add >=2 entries.
 REPLICA_HOST = "localhost"
-REPLICA_PUBLISHED_PORT = 6380  # redis-replica-1 -> 0.0.0.0:6380->6379
+REPLICA_PUBLISHED_PORTS = [6380, 6381]
 
 TOTAL_OPERATIONS = 50_000
 KEY_NAMESPACE = "fp_s1_"
@@ -119,12 +119,30 @@ def pipe_send(payload: bytes):
     sh_quiet_bytes(cmd, payload)
 
 
-def missed_count(replica_client, total_ops, key_ns):
-    missed = 0
-    for i in range(total_ops):
-        if replica_client.get(f"{key_ns}{i}") is None:
-            missed += 1
-    return missed
+def missed_count(replica_clients, total_ops, key_ns):
+    """
+    Count missed keys across one or more replica clients.
+    Returns total missed and per-replica counts list.
+    """
+    if not isinstance(replica_clients, (list, tuple)):
+        replica_clients = [replica_clients]
+
+    total_missed = 0
+    per_replica = []
+    for rc in replica_clients:
+        missed = 0
+        for i in range(total_ops):
+            try:
+                if rc.get(f"{key_ns}{i}") is None:
+                    missed += 1
+            except Exception:
+                # unreachable replica counts as all missed for simplicity
+                missed = total_ops
+                break
+        per_replica.append(missed)
+        total_missed += missed
+
+    return total_missed, per_replica
 
 
 # -----------------------------
@@ -138,9 +156,17 @@ def main():
     master = redis.Redis(host=MASTER_HOST, port=MASTER_PUBLISHED_PORT, decode_responses=True)
     master.ping()
 
-    # connect to one replica (host -> published port)
-    replica = redis.Redis(host=REPLICA_HOST, port=REPLICA_PUBLISHED_PORT, decode_responses=True)
-    replica.ping()
+    # connect to all configured replicas (host -> published ports)
+    replica_clients = []
+    for rp in REPLICA_PUBLISHED_PORTS:
+        try:
+            rc = redis.Redis(host=REPLICA_HOST, port=rp, decode_responses=True)
+            rc.ping()
+            replica_clients.append(rc)
+        except Exception:
+            continue
+
+    print(f"connected replica clients on host ports: {REPLICA_PUBLISHED_PORTS}")
 
     # Phase 1: baseline
     print("\n[Phase 1] Baseline Replication State (Before Write)")
@@ -181,11 +207,11 @@ def main():
     mo_now = get_master_repl_offset(raw_now)
     so_now, lag_now = parse_slave_offsets_lags(raw_now)
 
-    missed_now = missed_count(replica, TOTAL_OPERATIONS, KEY_NAMESPACE)
+    missed_now, per_rep_now = missed_count(replica_clients, TOTAL_OPERATIONS, KEY_NAMESPACE)
     print(f"master_repl_offset: {master_offset_before} -> {mo_now}")
     print(f"replica_offsets   : {so_now}")
     print(f"replica_lag(sec)  : {lag_now}")
-    print(f"missed_keys       : {missed_now}/{TOTAL_OPERATIONS}")
+    print(f"missed_keys(total): {missed_now}/{TOTAL_OPERATIONS} (per-replica={per_rep_now})")
 
     # Phase 4: stabilization
     print(f"\n[Phase 4] Waiting {STABILIZATION_WAIT}s for stabilization window")
@@ -194,11 +220,11 @@ def main():
     raw_late = fetch_replication_info_raw()
     so_late, lag_late = parse_slave_offsets_lags(raw_late)
 
-    missed_late = missed_count(replica, TOTAL_OPERATIONS, KEY_NAMESPACE)
+    missed_late, per_rep_late = missed_count(replica_clients, TOTAL_OPERATIONS, KEY_NAMESPACE)
     print("\n[Phase 4 Result] After Stabilization")
     print(f"replica_offsets   : {so_late}")
     print(f"replica_lag(sec)  : {lag_late}")
-    print(f"missed_keys       : {missed_late}/{TOTAL_OPERATIONS}")
+    print(f"missed_keys(total): {missed_late}/{TOTAL_OPERATIONS} (per-replica={per_rep_late})")
 
     # Summary
     print("\n=== ANALYSIS SUMMARY ===")
