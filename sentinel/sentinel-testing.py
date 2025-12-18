@@ -3,6 +3,7 @@ import sys
 import subprocess
 import threading
 import logging
+import os
 import redis
 from redis.sentinel import Sentinel, MasterNotFoundError
 
@@ -47,6 +48,19 @@ AUTO_STOP_DELAY_SECONDS = 10
 # Log file path for capturing events when AUTO_STOP_MASTER runs
 LOG_FILE = "sentinel-failover.log"
 
+# Docker sentinel container names (adjust if your docker-compose uses different names)
+DOCKER_SENTINEL_CONTAINERS = [
+    "redis-sentinel-1",
+    "redis-sentinel-2",
+    "redis-sentinel-3",
+]
+
+LOGDIR = "logs"
+
+
+def ensure_logdir():
+    os.makedirs(LOGDIR, exist_ok=True)
+
 
 def setup_logging():
     # file handler (detailed DEBUG) + stdout handler (concise INFO)
@@ -77,6 +91,24 @@ def delayed_stop_master(delay_seconds):
         logging.info(f"docker stop exit={p.returncode}; stdout={p.stdout.strip()} stderr={p.stderr.strip()}")
     except Exception as e:
         logging.exception(f"Failed to run docker stop: {e}")
+
+
+def capture_docker_logs_for_sentinels():
+    """Capture `docker logs` for each sentinel container and write to separate files (overwrite each run)."""
+    ensure_logdir()
+    for name in DOCKER_SENTINEL_CONTAINERS:
+        outpath = os.path.join(LOGDIR, f"{name}.log")
+        try:
+            p = subprocess.run(["docker", "logs", name], capture_output=True, text=True, check=False)
+            with open(outpath, "w") as f:
+                f.write(f"# docker logs for {name} captured at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\n")
+                f.write(p.stdout)
+                if p.stderr:
+                    f.write("\n# STDERR:\n")
+                    f.write(p.stderr)
+            # intentionally keep silent on stdout to avoid changing original script output
+        except Exception as e:
+            logging.exception("Failed to capture docker logs for %s: %s", name, e)
 
 
 def capture_sentinel_snapshots(sentinels):
@@ -234,9 +266,12 @@ def cleanup_all_keys(total_keys):
 
 
 def main():
-    setup_logging()
-    logging.info("=== FP Scenario 2: Redis Sentinel Failover Test (CLEAN) ===")
-    logging.info("-----------------------------------------------------------")
+    # keep original terminal output behavior (prints). Ensure logs dir exists and capture docker logs silently.
+    ensure_logdir()
+    capture_docker_logs_for_sentinels()
+
+    print("\n=== FP Scenario 2: Redis Sentinel Failover Test (CLEAN) ===")
+    print("-----------------------------------------------------------")
 
     # 1) connect sentinel + get current master (for monitoring info)
     sentinel_conn = connect_sentinel()
@@ -245,10 +280,10 @@ def main():
         m_ip, m_port = discover_master_ip_port(sentinel_conn)
         print(f"✔ master(before)={m_ip}:{m_port}")
     except MasterNotFoundError:
-        print("❌ Master not found from Sentinel (monitoring not ready).")
+        logging.info("❌ Master not found from Sentinel (monitoring not ready).")
         return
     except Exception as e:
-        print(f"❌ Sentinel connection error: {e}")
+        logging.info(f"❌ Sentinel connection error: {e}")
         return
 
     # 2) find actual writable master port on HOST and write BEFORE failover
@@ -267,62 +302,57 @@ def main():
         print("[Phase 1] missed_count(sample@replicas)=N/A (no replicas reachable on host ports)")
 
     # 3) trigger failover manually (stop current master container) or optionally automated
-    logging.info("\n[Phase 2] ACTION: stop current master container to trigger failover")
+    print("\n[Phase 2] ACTION: stop current master container to trigger failover")
+    print("Example:")
+    print("  docker stop redis-master")
     if AUTO_STOP_MASTER:
         # start a background thread to stop master after configured delay
         t = threading.Thread(target=delayed_stop_master, args=(AUTO_STOP_DELAY_SECONDS,), daemon=True)
         t.start()
-    else:
-        logging.info("Example: docker stop redis-master")
 
-    logging.info("Monitoring... (Ctrl+C to stop)\n")
+    print("Monitoring... (Ctrl+C to stop)\n")
 
-    # capture sentinel snapshots pre-monitoring
+    # capture sentinel snapshots pre-monitoring (silent)
     pre_snaps = capture_sentinel_snapshots(SENTINELS)
-    logging.info("Captured pre-failover sentinel snapshots: %s", pre_snaps)
 
     last_master = f"{m_ip}:{m_port}"
     t_failover_start = time.time()
     failover_detected_at = None
     new_master = None
+    last_heartbeat = 0.0
 
     try:
         while True:
             try:
-                        cur_ip, cur_port = discover_master_ip_port(sentinel_conn)
-                        cur = f"{cur_ip}:{cur_port}"
+                cur_ip, cur_port = discover_master_ip_port(sentinel_conn)
+                cur = f"{cur_ip}:{cur_port}"
 
-                        if cur != last_master:
-                            failover_detected_at = time.time()
-                            new_master = cur
-                            dt = failover_detected_at - t_failover_start
-                            logging.info("🚨 FAILOVER FOUND! new_master=%s (t=%.2f s)", cur, dt)
-                            # capture sentinel state immediately when change observed
-                            log_sentinels_during_election(SENTINELS)
-                            break
+                if cur != last_master:
+                    failover_detected_at = time.time()
+                    new_master = cur
+                    dt = failover_detected_at - t_failover_start
+                    print(f"[{time.strftime('%H:%M:%S')}] 🚨 FAILOVER FOUND! new_master={cur} (t={dt:.2f}s)")
+                    # capture sentinel state immediately when change observed (silent)
+                    log_sentinels_during_election(SENTINELS)
+                    # capture docker logs for sentinels at failover moment (silent)
+                    capture_docker_logs_for_sentinels()
+                    break
 
-                        # keep output clean; log occasional heartbeat
-                        if last_master and cur == last_master:
-                            sys.stdout.write("-")
-                            sys.stdout.flush()
-                            # occasionally log a heartbeat
-                            if int(time.time() - t_failover_start) % 5 == 0:
-                                logging.info("Monitoring: master still=%s", cur)
+                # print first master once
+                if last_master and cur == last_master:
+                    # keep output clean: dots
+                    sys.stdout.write("-")
+                    sys.stdout.flush()
 
-                        time.sleep(0.5)
-
-            except MasterNotFoundError:
-                logging.info("Master not found! (voting in progress?)")
-                # capture per-sentinel detailed view during election
-                log_sentinels_during_election(SENTINELS)
                 time.sleep(0.5)
 
-            except Exception as e:
-                logging.exception("Unexpected error while polling sentinel: %s", e)
+            except MasterNotFoundError:
+                print(f"\n[{time.strftime('%H:%M:%S')}] Master not found! (voting in progress?)")
+                time.sleep(0.5)
+
+            except Exception:
                 sys.stdout.write("-")
                 sys.stdout.flush()
-                # also query sentinels to capture context
-                log_sentinels_during_election(SENTINELS)
                 time.sleep(1)
 
     except KeyboardInterrupt:
@@ -330,9 +360,8 @@ def main():
         return
 
     # 4) after failover, write AGAIN to the new master (via host ports scan)
-    # capture sentinel snapshots right after failover detection
+    # capture sentinel snapshots right after failover detection (silent)
     post_snaps = capture_sentinel_snapshots(SENTINELS)
-    print("[Info] Captured post-failover sentinel snapshots")
 
     r_master2, host_master_port2 = connect_writable_master_via_host_ports()
     print(f"\n[Phase 3] writable master(after failover) = localhost:{host_master_port2}")
