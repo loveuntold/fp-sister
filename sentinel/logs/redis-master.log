@@ -1,0 +1,56 @@
+# docker logs for redis-master captured at 2025-12-18T18:01:50Z
+1:C 18 Dec 2025 18:01:02.299 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+1:C 18 Dec 2025 18:01:02.299 * Redis version=7.2.12, bits=64, commit=00000000, modified=0, pid=1, just started
+1:C 18 Dec 2025 18:01:02.299 * Configuration loaded
+1:M 18 Dec 2025 18:01:02.299 * monotonic clock: POSIX clock_gettime
+1:M 18 Dec 2025 18:01:02.301 * Running mode=standalone, port=6379.
+1:M 18 Dec 2025 18:01:02.302 * Server initialized
+1:M 18 Dec 2025 18:01:02.304 * Creating AOF base file appendonly.aof.1.base.rdb on server start
+1:M 18 Dec 2025 18:01:02.306 * Creating AOF incr file appendonly.aof.1.incr.aof on server start
+1:M 18 Dec 2025 18:01:02.306 * Ready to accept connections tcp
+1:M 18 Dec 2025 18:01:02.422 * Replica 172.19.0.4:6379 asks for synchronization
+1:M 18 Dec 2025 18:01:02.422 * Full resync requested by replica 172.19.0.4:6379
+1:M 18 Dec 2025 18:01:02.422 * Replication backlog created, my new replication IDs are '383d7eadd1fcec3ea572a0a4a3c71b21a710c899' and '0000000000000000000000000000000000000000'
+1:M 18 Dec 2025 18:01:02.422 * Delay next BGSAVE for diskless SYNC
+1:M 18 Dec 2025 18:01:02.432 * Replica 172.19.0.5:6379 asks for synchronization
+1:M 18 Dec 2025 18:01:02.432 * Full resync requested by replica 172.19.0.5:6379
+1:M 18 Dec 2025 18:01:02.432 * Delay next BGSAVE for diskless SYNC
+1:M 18 Dec 2025 18:01:02.440 * Replica 172.19.0.6:6379 asks for synchronization
+1:M 18 Dec 2025 18:01:02.440 * Full resync requested by replica 172.19.0.6:6379
+1:M 18 Dec 2025 18:01:02.440 * Delay next BGSAVE for diskless SYNC
+1:M 18 Dec 2025 18:01:02.455 * Replica 172.19.0.7:6379 asks for synchronization
+1:M 18 Dec 2025 18:01:02.455 * Full resync requested by replica 172.19.0.7:6379
+1:M 18 Dec 2025 18:01:02.455 * Delay next BGSAVE for diskless SYNC
+1:M 18 Dec 2025 18:01:07.405 * Starting BGSAVE for SYNC with target: replicas sockets
+1:M 18 Dec 2025 18:01:07.407 * Background RDB transfer started by pid 22
+22:C 18 Dec 2025 18:01:07.409 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+1:M 18 Dec 2025 18:01:07.409 * Diskless rdb transfer, done reading from pipe, 4 replicas still up.
+1:M 18 Dec 2025 18:01:07.415 * Background RDB transfer terminated with success
+1:M 18 Dec 2025 18:01:07.415 * Streamed RDB transfer with replica 172.19.0.4:6379 succeeded (socket). Waiting for REPLCONF ACK from replica to enable streaming
+1:M 18 Dec 2025 18:01:07.415 * Synchronization with replica 172.19.0.4:6379 succeeded
+1:M 18 Dec 2025 18:01:07.415 * Streamed RDB transfer with replica 172.19.0.5:6379 succeeded (socket). Waiting for REPLCONF ACK from replica to enable streaming
+1:M 18 Dec 2025 18:01:07.415 * Synchronization with replica 172.19.0.5:6379 succeeded
+1:M 18 Dec 2025 18:01:07.415 * Streamed RDB transfer with replica 172.19.0.6:6379 succeeded (socket). Waiting for REPLCONF ACK from replica to enable streaming
+1:M 18 Dec 2025 18:01:07.415 * Synchronization with replica 172.19.0.6:6379 succeeded
+1:M 18 Dec 2025 18:01:07.415 * Streamed RDB transfer with replica 172.19.0.7:6379 succeeded (socket). Waiting for REPLCONF ACK from replica to enable streaming
+1:M 18 Dec 2025 18:01:07.415 * Synchronization with replica 172.19.0.7:6379 succeeded
+1:M 18 Dec 2025 18:01:17.781 * Connection with replica 172.19.0.6:6379 lost.
+1:M 18 Dec 2025 18:01:17.790 * Connection with replica 172.19.0.7:6379 lost.
+1:M 18 Dec 2025 18:01:17.790 * Connection with replica 172.19.0.5:6379 lost.
+1:M 18 Dec 2025 18:01:17.791 * Connection with replica 172.19.0.4:6379 lost.
+1:M 18 Dec 2025 18:01:17.797 * Replica 172.19.0.6:6379 asks for synchronization
+1:M 18 Dec 2025 18:01:17.797 * Partial resynchronization request from 172.19.0.6:6379 accepted. Sending 0 bytes of backlog starting from offset 247993.
+1:M 18 Dec 2025 18:01:17.799 * Replica 172.19.0.5:6379 asks for synchronization
+1:M 18 Dec 2025 18:01:17.799 * Partial resynchronization request from 172.19.0.5:6379 accepted. Sending 0 bytes of backlog starting from offset 247993.
+1:M 18 Dec 2025 18:01:17.799 * Replica 172.19.0.7:6379 asks for synchronization
+1:M 18 Dec 2025 18:01:17.799 * Partial resynchronization request from 172.19.0.7:6379 accepted. Sending 0 bytes of backlog starting from offset 247993.
+1:M 18 Dec 2025 18:01:17.799 * Replica 172.19.0.4:6379 asks for synchronization
+1:M 18 Dec 2025 18:01:17.799 * Partial resynchronization request from 172.19.0.4:6379 accepted. Sending 0 bytes of backlog starting from offset 247993.
+1:signal-handler (1766080903) Received SIGTERM scheduling shutdown...
+1:M 18 Dec 2025 18:01:43.647 * User requested shutdown...
+1:M 18 Dec 2025 18:01:43.647 * Waiting for replicas before shutting down.
+1:M 18 Dec 2025 18:01:43.955 * 4 of 4 replicas are in sync when shutting down.
+1:M 18 Dec 2025 18:01:43.955 * Calling fsync() on the AOF file.
+1:M 18 Dec 2025 18:01:43.957 * Saving the final RDB snapshot before exiting.
+1:M 18 Dec 2025 18:01:43.967 * DB saved on disk
+1:M 18 Dec 2025 18:01:43.967 # Redis is now ready to exit, bye bye...

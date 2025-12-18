@@ -55,6 +55,17 @@ DOCKER_SENTINEL_CONTAINERS = [
     "redis-sentinel-3",
 ]
 
+# Docker replica container names (adjust to your compose service names)
+DOCKER_REPLICA_CONTAINERS = [
+    "redis-replica-1",
+    "redis-replica-2",
+    "redis-replica-3",
+    "redis-replica-4",
+]
+
+# Master container name
+DOCKER_MASTER_CONTAINER = "redis-master"
+
 LOGDIR = "logs"
 
 
@@ -94,21 +105,27 @@ def delayed_stop_master(delay_seconds):
 
 
 def capture_docker_logs_for_sentinels():
-    """Capture `docker logs` for each sentinel container and write to separate files (overwrite each run)."""
+    """Capture `docker logs` for sentinel, master and replica containers and write to separate files (overwrite each run)."""
     ensure_logdir()
-    for name in DOCKER_SENTINEL_CONTAINERS:
+    all_names = []
+    all_names.extend(DOCKER_SENTINEL_CONTAINERS)
+    # include master and replicas
+    all_names.append(DOCKER_MASTER_CONTAINER)
+    all_names.extend(DOCKER_REPLICA_CONTAINERS)
+
+    for name in all_names:
         outpath = os.path.join(LOGDIR, f"{name}.log")
         try:
             p = subprocess.run(["docker", "logs", name], capture_output=True, text=True, check=False)
             with open(outpath, "w") as f:
                 f.write(f"# docker logs for {name} captured at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\n")
-                f.write(p.stdout)
+                f.write(p.stdout or "")
                 if p.stderr:
                     f.write("\n# STDERR:\n")
                     f.write(p.stderr)
             # intentionally keep silent on stdout to avoid changing original script output
         except Exception as e:
-            logging.exception("Failed to capture docker logs for %s: %s", name, e)
+            logging.debug("Failed to capture docker logs for %s: %s", name, e)
 
 
 def capture_sentinel_snapshots(sentinels):
@@ -351,7 +368,6 @@ def main():
     print(f"[Phase 2] background writer started: writing {WRITE_AFTER} keys starting at {WRITE_BEFORE+1}")
 
     print("Monitoring... (Ctrl+C to stop)\n")
-    print("-" * 80)
 
     # capture sentinel snapshots pre-monitoring (silent)
     pre_snaps = capture_sentinel_snapshots(SENTINELS)

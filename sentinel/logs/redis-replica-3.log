@@ -1,0 +1,39 @@
+# docker logs for redis-replica-3 captured at 2025-12-18T18:01:50Z
+1:C 18 Dec 2025 18:01:02.450 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+1:C 18 Dec 2025 18:01:02.450 * Redis version=7.2.12, bits=64, commit=00000000, modified=0, pid=1, just started
+1:C 18 Dec 2025 18:01:02.450 * Configuration loaded
+1:S 18 Dec 2025 18:01:02.450 * monotonic clock: POSIX clock_gettime
+1:S 18 Dec 2025 18:01:02.450 * Running mode=standalone, port=6379.
+1:S 18 Dec 2025 18:01:02.451 * Server initialized
+1:S 18 Dec 2025 18:01:02.451 * Ready to accept connections tcp
+1:S 18 Dec 2025 18:01:02.453 * Connecting to MASTER redis-master:6379
+1:S 18 Dec 2025 18:01:02.454 * MASTER <-> REPLICA sync started
+1:S 18 Dec 2025 18:01:02.454 * Non blocking connect for SYNC fired the event.
+1:S 18 Dec 2025 18:01:02.455 * Master replied to PING, replication can continue...
+1:S 18 Dec 2025 18:01:02.455 * Partial resynchronization not possible (no cached master)
+1:S 18 Dec 2025 18:01:07.405 * Full resync from master: 383d7eadd1fcec3ea572a0a4a3c71b21a710c899:204968
+1:S 18 Dec 2025 18:01:07.408 * MASTER <-> REPLICA sync: receiving streamed RDB from master with EOF to disk
+1:S 18 Dec 2025 18:01:07.409 * MASTER <-> REPLICA sync: Flushing old data
+1:S 18 Dec 2025 18:01:07.409 * MASTER <-> REPLICA sync: Loading DB in memory
+1:S 18 Dec 2025 18:01:07.414 * Loading RDB produced by version 7.2.12
+1:S 18 Dec 2025 18:01:07.414 * RDB age 0 seconds
+1:S 18 Dec 2025 18:01:07.414 * RDB memory usage when created 1.83 Mb
+1:S 18 Dec 2025 18:01:07.416 * Done loading RDB, keys loaded: 3515, keys expired: 0.
+1:S 18 Dec 2025 18:01:07.416 * MASTER <-> REPLICA sync: Finished with success
+1:M 18 Dec 2025 18:01:17.780 * Connection with master lost.
+1:M 18 Dec 2025 18:01:17.780 * Caching the disconnected master state.
+1:S 18 Dec 2025 18:01:17.782 * Connecting to MASTER 172.19.0.2:6379
+1:S 18 Dec 2025 18:01:17.791 * MASTER <-> REPLICA sync started
+1:S 18 Dec 2025 18:01:17.791 * REPLICAOF 172.19.0.2:6379 enabled (user request from 'id=3 addr=172.19.0.9:48036 laddr=172.19.0.7:6379 fd=9 name=sentinel-334a05cb-cmd age=15 idle=0 flags=x db=0 sub=0 psub=0 ssub=0 multi=4 qbuf=198 qbuf-free=20276 argv-mem=4 multi-mem=178 rbs=1024 rbp=1024 obl=45 oll=0 omem=0 tot-mem=22702 events=r cmd=exec user=default redir=-1 resp=2 lib-name= lib-ver=')
+1:S 18 Dec 2025 18:01:17.797 * Non blocking connect for SYNC fired the event.
+1:S 18 Dec 2025 18:01:17.798 * Master replied to PING, replication can continue...
+1:S 18 Dec 2025 18:01:17.798 * Trying a partial resynchronization (request 383d7eadd1fcec3ea572a0a4a3c71b21a710c899:247993).
+1:S 18 Dec 2025 18:01:17.799 * Successful partial resynchronization with master.
+1:S 18 Dec 2025 18:01:17.799 * MASTER <-> REPLICA sync: Master accepted a Partial Resynchronization.
+1:S 18 Dec 2025 18:01:43.976 * Connection with master lost.
+1:S 18 Dec 2025 18:01:43.976 * Caching the disconnected master state.
+1:S 18 Dec 2025 18:01:43.976 * Reconnecting to MASTER 172.19.0.2:6379
+1:S 18 Dec 2025 18:01:43.976 * MASTER <-> REPLICA sync started
+1:S 18 Dec 2025 18:01:43.976 # Error condition on socket for SYNC: Connection refused
+1:S 18 Dec 2025 18:01:44.862 * Connecting to MASTER 172.19.0.2:6379
+1:S 18 Dec 2025 18:01:44.863 * MASTER <-> REPLICA sync started
