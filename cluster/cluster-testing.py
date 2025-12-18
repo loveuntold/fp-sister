@@ -1,6 +1,8 @@
 import subprocess
 import time
 from collections import defaultdict
+import logging
+from datetime import datetime
 
 BOOTSTRAP_CONTAINER = "redis-node-1"
 BOOTSTRAP_PORT = 7000
@@ -11,6 +13,13 @@ KEY_END = 10000  # inclusive
 CLEANUP = True
 RUN_FAILOVER_TEST = False  # set True to run automated master stop/promote test
 
+logging.basicConfig(
+    filename=f"cluster_test.log",
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
+log = logging.getLogger()
 
 def sh(cmd, inp=None):
     if inp is None:
@@ -20,11 +29,9 @@ def sh(cmd, inp=None):
         raise RuntimeError(f"Command failed ({p.returncode}).\nSTDERR:\n{p.stderr}\nSTDOUT:\n{p.stdout}")
     return p.stdout
 
-
 def rcli(container, port, *args):
     base = ["docker", "exec", "-i", container, "redis-cli", "-p", str(port)]
     return sh(base + list(args)).strip()
-
 
 def verify_cluster_ok():
     info = rcli(BOOTSTRAP_CONTAINER, BOOTSTRAP_PORT, "CLUSTER", "INFO")
@@ -32,6 +39,7 @@ def verify_cluster_ok():
         print("❌ Cluster not ready:\n", info)
         raise SystemExit(1)
     print("✔ cluster_state:ok")
+    log.info("cluster_state: ok")
 
 
 def port_to_container(port: int) -> str:
@@ -98,9 +106,7 @@ def bulk_write_fast(slot_table):
     # group payload per master_port
     payload_by_port = defaultdict(list)
 
-    # compute slot locally (CRC16 used by Redis Cluster)
-    # We'll ask redis for KEYSLOT in batch using one redis-cli --pipe to avoid reimplementing CRC16.
-    # Trick: send many "CLUSTER KEYSLOT key" through one pipe, then parse outputs.
+    # compute slot using one redis-cli --pipe
     keys = [f"{KEY_PREFIX}{i}" for i in range(KEY_START, KEY_END + 1)]
     cmd_lines = "".join([f"CLUSTER KEYSLOT {k}\n" for k in keys])
     out = sh(["docker", "exec", "-i", BOOTSTRAP_CONTAINER, "redis-cli", "-p", str(BOOTSTRAP_PORT), "--raw"], inp=cmd_lines)
@@ -123,7 +129,7 @@ def bulk_write_fast(slot_table):
         sh(["docker", "exec", "-i", container, "redis-cli", "-p", str(master_port), "--pipe"], inp=payload)
     dur = time.time() - t0
     print(f"✔ Write finished in {dur:.3f}s (~{int(total/dur)} ops/sec)")
-
+    log.info(f"Write finished in {dur:.3f}s ({int(total/dur)} ops/sec)")
 
 def analyze_distribution(slot_table):
     total = KEY_END - KEY_START + 1
@@ -150,6 +156,7 @@ def analyze_distribution(slot_table):
         pct = (c / total) * 100
         print(f"- Master {master} -> {c} keys ({pct:.2f}%)")
         print(f"  sample: {', '.join(samples[master])}")
+        log.info(f"Master {master} -> {c} keys ({pct:.2f}%)")
 
     print("\n[Conclusion]")
     print("- Redis Cluster shards data by hash slots (0-16383).")
@@ -180,7 +187,7 @@ def cleanup_fast(slot_table):
         sh(["docker", "exec", "-i", container, "redis-cli", "-p", str(master_port), "--pipe"], inp=payload)
 
     print("✔ Cleanup done")
-
+    log.handlers[0].stream.write("\n")
 
 def main():
     print("\n=== FP SCENARIO 3: Redis Cluster Sharding Test (FAST FINAL) ===")
