@@ -7,11 +7,6 @@ import os
 import redis
 from redis.sentinel import Sentinel, MasterNotFoundError
 
-# ==============================
-# FP Scenario 2 (CLEAN)
-# Redis Sentinel Failover Test
-# ==============================
-
 # Sentinel ports mapped to host (docker-compose)
 SENTINELS = [
     ("localhost", 26379),
@@ -19,8 +14,7 @@ SENTINELS = [
     ("localhost", 26381),
 ]
 
-SERVICE_NAME = "init_master"  # must match sentinel monitor <name> ...
-# Published ports on host for your redis containers (docker-compose)
+SERVICE_NAME = "init_master" 
 PUBLISHED_PORTS = {
     "redis-master": 6379,
     "redis-replica-1": 6380,
@@ -28,7 +22,7 @@ PUBLISHED_PORTS = {
     "redis-replica-3": 6382,
     "redis-replica-4": 6383,
 }
-# We don't know which replica becomes new master, so we try these ports
+
 CANDIDATE_WRITE_PORTS = [6379, 6380, 6381, 6382, 6383]
 
 WRITE_BEFORE = 2000
@@ -38,24 +32,17 @@ KEY_PREFIX = "fp_s2_"
 SENTINEL_SOCKET_TIMEOUT = 0.2
 REDIS_SOCKET_TIMEOUT = 1.0
 
-# If True the script will attempt to `docker stop redis-master` to trigger failover.
-# Keep False by default to avoid surprises; set to True only when running in controlled env.
 AUTO_STOP_MASTER = False
-
-# Delay (seconds) before issuing docker stop when AUTO_STOP_MASTER is True
 AUTO_STOP_DELAY_SECONDS = 10
 
-# Log file path for capturing events when AUTO_STOP_MASTER runs
 LOG_FILE = "sentinel-failover.log"
 
-# Docker sentinel container names (adjust if your docker-compose uses different names)
 DOCKER_SENTINEL_CONTAINERS = [
     "redis-sentinel-1",
     "redis-sentinel-2",
     "redis-sentinel-3",
 ]
 
-# Docker replica container names (adjust to your compose service names)
 DOCKER_REPLICA_CONTAINERS = [
     "redis-replica-1",
     "redis-replica-2",
@@ -63,29 +50,23 @@ DOCKER_REPLICA_CONTAINERS = [
     "redis-replica-4",
 ]
 
-# Master container name
 DOCKER_MASTER_CONTAINER = "redis-master"
 
 LOGDIR = "logs"
 
-
 def ensure_logdir():
     os.makedirs(LOGDIR, exist_ok=True)
 
-
 def setup_logging():
-    # file handler (detailed DEBUG) + stdout handler (concise INFO)
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
 
-    # detailed file handler
     fh = logging.FileHandler(LOG_FILE, mode="w")
     fh.setLevel(logging.DEBUG)
     fh_fmt = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
     fh.setFormatter(fh_fmt)
     logger.addHandler(fh)
 
-    # concise stdout handler for neat terminal output
     sh = logging.StreamHandler(sys.stdout)
     sh.setLevel(logging.INFO)
     sh_fmt = logging.Formatter("%(message)s")
@@ -109,7 +90,6 @@ def capture_docker_logs_for_sentinels():
     ensure_logdir()
     all_names = []
     all_names.extend(DOCKER_SENTINEL_CONTAINERS)
-    # include master and replicas
     all_names.append(DOCKER_MASTER_CONTAINER)
     all_names.extend(DOCKER_REPLICA_CONTAINERS)
 
@@ -123,7 +103,7 @@ def capture_docker_logs_for_sentinels():
                 if p.stderr:
                     f.write("\n# STDERR:\n")
                     f.write(p.stderr)
-            # intentionally keep silent on stdout to avoid changing original script output
+
         except Exception as e:
             logging.debug("Failed to capture docker logs for %s: %s", name, e)
 
@@ -139,7 +119,6 @@ def capture_sentinel_snapshots(sentinels):
         except Exception as e:
             snaps.append({"host": h, "port": p, "ts": time.time(), "error": str(e)})
     logging.debug("Captured sentinel snapshots (raw): %s", snaps)
-    # concise summary for terminal/log at INFO
     try:
         summary = [{"host": s["host"], "port": s["port"], "sentinel_masters": s.get("info_keys", {}).get("sentinel_masters")} for s in snaps]
     except Exception:
@@ -162,17 +141,13 @@ def log_sentinels_during_election(sentinels):
             except Exception as e:
                 sent_list = f"ERR: {e}"
 
-            # detailed raw output to file (DEBUG)
             logging.debug("Sentinel %s:%s raw masters=%s sentinels=%s", h, p, masters, sent_list)
 
-            # concise terminal-friendly summary
             try:
-                # try to extract flags and voted-leader if present
                 flags = None
                 voted = None
                 if isinstance(masters, list) and len(masters) > 0:
                     m = masters[0]
-                    # find flags
                     for i in range(0, len(m) - 1, 2):
                         if m[i] == b'flags' and i + 1 < len(m):
                             flags = m[i + 1].decode() if isinstance(m[i + 1], bytes) else str(m[i + 1])
@@ -251,12 +226,10 @@ def background_writer(start_idx, total_count, interval, stop_event, result_dict)
     while written < total_count and not stop_event.is_set():
         try:
             r, port = connect_writable_master_via_host_ports()
-            # single write (fast), pipeline could be used but retry semantics are simpler this way
             r.set(f"{KEY_PREFIX}{i}", f"{time.time()}_{i}")
             i += 1
             written += 1
         except Exception:
-            # master not writable yet (during election) — back off briefly and retry
             time.sleep(0.05)
             continue
         if interval:
@@ -284,7 +257,6 @@ def missed_count_on_replicas(sample_start, sample_count):
                 decode_responses=True,
                 socket_timeout=REDIS_SOCKET_TIMEOUT,
             )
-            # quick check: only count for replicas that are actually reachable
             _ = rr.ping()
         except Exception:
             continue
@@ -300,7 +272,6 @@ def missed_count_on_replicas(sample_start, sample_count):
 
 
 def cleanup_all_keys(total_keys):
-    # delete from whichever is master now
     r, port = connect_writable_master_via_host_ports()
     keys = [f"{KEY_PREFIX}{i}" for i in range(1, total_keys + 1)]
     CHUNK = 5000
@@ -310,14 +281,12 @@ def cleanup_all_keys(total_keys):
 
 
 def main():
-    # keep original terminal output behavior (prints). Ensure logs dir exists and capture docker logs silently.
     ensure_logdir()
     capture_docker_logs_for_sentinels()
 
-    print("\n=== FP Scenario 2: Redis Sentinel Failover Test (CLEAN) ===")
+    print("\n=== FP Scenario 2: Redis Sentinel Failover Test ===")
     print("-----------------------------------------------------------")
 
-    # 1) connect sentinel + get current master (for monitoring info)
     sentinel_conn = connect_sentinel()
 
     try:
@@ -330,7 +299,6 @@ def main():
         logging.info(f"❌ Sentinel connection error: {e}")
         return
 
-    # 2) find actual writable master port on HOST and write BEFORE failover
     r_master, host_master_port = connect_writable_master_via_host_ports()
     print(f"[Info] writable master (host) = localhost:{host_master_port}")
 
@@ -338,25 +306,19 @@ def main():
     d1 = write_keys(host_master_port, 1, WRITE_BEFORE)
     print(f"✔ write(before) done in {d1:.3f}s")
 
-    # quick consistency sample (optional but requested earlier)
     missed, checked = missed_count_on_replicas(1, min(200, WRITE_BEFORE))
     if checked > 0:
         print(f"[Phase 1] missed_count(sample@replicas)={missed} (checked_replicas={checked})")
     else:
         print("[Phase 1] missed_count(sample@replicas)=N/A (no replicas reachable on host ports)")
 
-    # 3) trigger failover manually (stop current master container) or optionally automated
     print("\n[Phase 2] ACTION: stop current master container to trigger failover")
     print("Example:")
     print("  docker stop redis-master")
     if AUTO_STOP_MASTER:
-        # start a background thread to stop master after configured delay
         t = threading.Thread(target=delayed_stop_master, args=(AUTO_STOP_DELAY_SECONDS,), daemon=True)
         t.start()
 
-    # Start a background writer that will perform the "after" writes continuously
-    # so writes don't block/stop during master election. It will keep retrying
-    # to find the writable master and continue once a new master appears.
     writer_stop = threading.Event()
     writer_result = {}
     writer_thread = threading.Thread(
@@ -369,7 +331,6 @@ def main():
 
     print("Monitoring... (Ctrl+C to stop)\n")
 
-    # capture sentinel snapshots pre-monitoring (silent)
     pre_snaps = capture_sentinel_snapshots(SENTINELS)
 
     last_master = f"{m_ip}:{m_port}"
@@ -389,15 +350,11 @@ def main():
                     new_master = cur
                     dt = failover_detected_at - t_failover_start
                     print(f"[{time.strftime('%H:%M:%S')}] 🚨 FAILOVER FOUND! new_master={cur} (t={dt:.2f}s)")
-                    # capture sentinel state immediately when change observed (silent)
                     log_sentinels_during_election(SENTINELS)
-                    # capture docker logs for sentinels at failover moment (silent)
                     capture_docker_logs_for_sentinels()
                     break
 
-                # print first master once
                 if last_master and cur == last_master:
-                    # keep output clean: dots
                     sys.stdout.write("-")
                     sys.stdout.flush()
 
@@ -416,11 +373,9 @@ def main():
         print("\nMonitoring stopped.")
         return
 
-    # 4) after failover, wait for the background writer to finish (it keeps trying during election)
     post_snaps = capture_sentinel_snapshots(SENTINELS)
 
     print("\n[Phase 3] waiting for background writer to finish (it continues across failover)")
-    # wait with generous timeout; if still alive, request stop and join
     writer_thread.join(timeout=300)
     if writer_thread.is_alive():
         print("⚠ background writer still running after timeout; stopping it now.")
@@ -437,7 +392,6 @@ def main():
     else:
         print("[Phase 3] missed_count(sample@replicas)=N/A (no replicas reachable on host ports)")
 
-    # 5) summary
     print("\n=== SUMMARY ===")
     print(f"- master(before)           : {last_master}")
     print(f"- master(after)            : {new_master}")
@@ -445,7 +399,6 @@ def main():
     print(f"- write(before)            : {d1:.3f}s")
     print(f"- write(after/background)  : {duration_after:.3f}s (written={written_after})")
 
-    # 6) cleanup
     total_keys = WRITE_BEFORE + WRITE_AFTER
     cleaned_on = cleanup_all_keys(total_keys)
     print(f"✔ Cleanup completed (issued via localhost:{cleaned_on})")
