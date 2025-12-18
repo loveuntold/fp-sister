@@ -28,14 +28,13 @@ untuk build semua container yang dibutuhkan. Build docker container ini setelah 
 
 Agar cluster dapat memilih node master dan replica **secara dinamis**, gunakan command:
 ```
-docker exec -it redis-node-1 redis-cli \
-  --cluster create \
-  redis-node-1:7000 \
-  redis-node-2:7000 \
-  redis-node-3:7000 \
-  redis-node-4:7000 \
-  redis-node-5:7000 \
-  redis-node-6:7000 \
-  --cluster-replicas 1
+docker exec -it redis-node-1 redis-cli --cluster create \
+redis-node-1:7000 \
+redis-node-2:7001 \
+redis-node-3:7002 \
+redis-node-4:7003 \
+redis-node-5:7004 \
+redis-node-6:7005 \
+--cluster-replicas 1
 ```
 Pekerjaan dapat bergerak ke instruksi selanjutnya.
