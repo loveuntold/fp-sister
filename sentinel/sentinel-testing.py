@@ -223,6 +223,33 @@ def write_keys(port, start_idx, count):
     return time.time() - t0
 
 
+def background_writer(start_idx, total_count, interval, stop_event, result_dict):
+    """Continuously attempt to write keys to whichever published host-port is the current master.
+    This will retry on connection errors so writes continue across failover.
+    Writes keys [start_idx .. start_idx+total_count-1].
+    """
+    i = start_idx
+    written = 0
+    t0 = time.time()
+    while written < total_count and not stop_event.is_set():
+        try:
+            r, port = connect_writable_master_via_host_ports()
+            # single write (fast), pipeline could be used but retry semantics are simpler this way
+            r.set(f"{KEY_PREFIX}{i}", f"{time.time()}_{i}")
+            i += 1
+            written += 1
+        except Exception:
+            # master not writable yet (during election) — back off briefly and retry
+            time.sleep(0.05)
+            continue
+        if interval:
+            time.sleep(interval)
+
+    result_dict["written"] = written
+    result_dict["duration"] = time.time() - t0
+    return
+
+
 def missed_count_on_replicas(sample_start, sample_count):
     """
     Optional: read-after-write style check to show eventual consistency.
@@ -310,7 +337,21 @@ def main():
         t = threading.Thread(target=delayed_stop_master, args=(AUTO_STOP_DELAY_SECONDS,), daemon=True)
         t.start()
 
+    # Start a background writer that will perform the "after" writes continuously
+    # so writes don't block/stop during master election. It will keep retrying
+    # to find the writable master and continue once a new master appears.
+    writer_stop = threading.Event()
+    writer_result = {}
+    writer_thread = threading.Thread(
+        target=background_writer,
+        args=(WRITE_BEFORE + 1, WRITE_AFTER, 0.0, writer_stop, writer_result),
+        daemon=True,
+    )
+    writer_thread.start()
+    print(f"[Phase 2] background writer started: writing {WRITE_AFTER} keys starting at {WRITE_BEFORE+1}")
+
     print("Monitoring... (Ctrl+C to stop)\n")
+    print("-" * 80)
 
     # capture sentinel snapshots pre-monitoring (silent)
     pre_snaps = capture_sentinel_snapshots(SENTINELS)
@@ -359,15 +400,20 @@ def main():
         print("\nMonitoring stopped.")
         return
 
-    # 4) after failover, write AGAIN to the new master (via host ports scan)
-    # capture sentinel snapshots right after failover detection (silent)
+    # 4) after failover, wait for the background writer to finish (it keeps trying during election)
     post_snaps = capture_sentinel_snapshots(SENTINELS)
 
-    r_master2, host_master_port2 = connect_writable_master_via_host_ports()
-    print(f"\n[Phase 3] writable master(after failover) = localhost:{host_master_port2}")
-    print(f"[Phase 3] write {WRITE_AFTER} keys (after failover)")
-    d2 = write_keys(host_master_port2, WRITE_BEFORE + 1, WRITE_AFTER)
-    print(f"✔ write(after) done in {d2:.3f}s")
+    print("\n[Phase 3] waiting for background writer to finish (it continues across failover)")
+    # wait with generous timeout; if still alive, request stop and join
+    writer_thread.join(timeout=300)
+    if writer_thread.is_alive():
+        print("⚠ background writer still running after timeout; stopping it now.")
+        writer_stop.set()
+        writer_thread.join()
+
+    written_after = writer_result.get("written", 0)
+    duration_after = writer_result.get("duration", 0.0)
+    print(f"✔ background write completed: written={written_after} in {duration_after:.3f}s")
 
     missed2, checked2 = missed_count_on_replicas(WRITE_BEFORE + 1, min(200, WRITE_AFTER))
     if checked2 > 0:
@@ -380,7 +426,8 @@ def main():
     print(f"- master(before)           : {last_master}")
     print(f"- master(after)            : {new_master}")
     print(f"- failover_detection_time  : {(failover_detected_at - t_failover_start):.2f}s")
-    print(f"- write(before/after)      : {d1:.3f}s / {d2:.3f}s")
+    print(f"- write(before)            : {d1:.3f}s")
+    print(f"- write(after/background)  : {duration_after:.3f}s (written={written_after})")
 
     # 6) cleanup
     total_keys = WRITE_BEFORE + WRITE_AFTER
